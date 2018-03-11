@@ -9,11 +9,10 @@ attribute vec3 vertColor;
 uniform mat4 mWorld;
 uniform mat4 mProject;
 uniform mat4 mView;
-uniform mat4 mPos;
 varying vec3 fragColor;
 void main(){
     fragColor = vertColor;
-    gl_Position = mProject * mView * (mWorld * vec4(vertPosition, 1.0) + mPos);
+    gl_Position = mProject * mView * mWorld * vec4(vertPosition, 1.0);
 }
 `;
 var fSource = `
@@ -27,18 +26,6 @@ void main(){
 function main(){
     var canvas = document.getElementById('glCanvas');
     var gl = canvas.getContext('webgl');
-    var objToDraw = [{
-        programInfo: {
-            program: null,
-            attribLoc: null,
-            uniLoc: null,
-        },
-        buffers: {
-            vertColor: null,
-            index: null,
-        },
-        uniforms,
-    }];
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
@@ -46,10 +33,35 @@ function main(){
     gl.frontFace(gl.CCW);
     gl.cullFace(gl.BACK)
     
-    var program = createProgram(
-        gl, 
-        createShader(gl, gl.VERTEX_SHADER, vSource),
-        createShader(gl, gl.FRAGMENT_SHADER, fShader));
+    var vShader = gl.createShader(gl.VERTEX_SHADER);
+    var fShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(vShader, vSource);
+    gl.shaderSource(fShader, fSource);
+
+    gl.compileShader(vShader);
+    if(!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)){
+        console.error("Vertext shader compile error", gl.getShaderInfoLog(vShader));
+    }
+
+    gl.compileShader(fShader);
+    if(!gl.getShaderParameter(fShader, gl.COMPILE_STATUS)){
+        console.error("fragment shader compile error", gl.getShaderInfoLog(fShader));
+    }
+
+    var program = gl.createProgram();
+    gl.attachShader(program, vShader);
+    gl.attachShader(program, fShader);
+    gl.linkProgram(program);
+    if(!gl.getProgramParameter(program, gl.LINK_STATUS)){
+        console.error("Linker error", gl.getProgramInfoLog(program));
+    }
+
+    if(DEBUG){
+        gl.validateProgram(program);
+        if(!gl.getProgramParameter(program, gl.VALIDATE_STATUS)){
+            console.error("Validate Error", gl.getProgramInfoLog(program));
+        }
+    }
 
     var boxVertices = 
 	[ // X, Y, Z           R, G, B
@@ -66,28 +78,28 @@ function main(){
 		-1.0, 1.0, -1.0,   0.75, 0.25, 0.5,
 
 		// Right
-		1.0, 1.0, 1.0,    0.0, 0.25, 0.75,
+		1.0, 1.0, 1.0,    0.25, 0.25, 0.75,
 		1.0, -1.0, 1.0,   0.25, 0.25, 0.75,
 		1.0, -1.0, -1.0,  0.25, 0.25, 0.75,
-		1.0, 1.0, -1.0,   0.25, 0.25, 0.0,
+		1.0, 1.0, -1.0,   0.25, 0.25, 0.75,
 
 		// Front
 		1.0, 1.0, 1.0,    1.0, 0.0, 0.15,
-		1.0, -1.0, 1.0,    1.0, 1.0, 0.15,
+		1.0, -1.0, 1.0,    1.0, 0.0, 0.15,
 		-1.0, -1.0, 1.0,    1.0, 0.0, 0.15,
-		-1.0, 1.0, 1.0,    1.0, 1.0, 0.15,
+		-1.0, 1.0, 1.0,    1.0, 0.0, 0.15,
 
 		// Back
 		1.0, 1.0, -1.0,    0.0, 1.0, 0.15,
-		1.0, -1.0, -1.0,    0.0, 0.0, 0.15,
+		1.0, -1.0, -1.0,    0.0, 1.0, 0.15,
 		-1.0, -1.0, -1.0,    0.0, 1.0, 0.15,
-		-1.0, 1.0, -1.0,    0.0, 1.0, 1.0,
+		-1.0, 1.0, -1.0,    0.0, 1.0, 0.15,
 
 		// Bottom
 		-1.0, -1.0, -1.0,   0.5, 0.5, 1.0,
-		-1.0, -1.0, 1.0,    1.0, 0.5, 1.0,
+		-1.0, -1.0, 1.0,    0.5, 0.5, 1.0,
 		1.0, -1.0, 1.0,     0.5, 0.5, 1.0,
-		1.0, -1.0, -1.0,    0.5, 0.5, 0.0,
+		1.0, -1.0, -1.0,    0.5, 0.5, 1.0,
 	];
 
 	var boxIndices =
@@ -155,11 +167,8 @@ function main(){
     var mView = new Float32Array(16);
     var mProject = new Float32Array(16);
     mat4.identity(mWorld);
-    //mat4.identity(mView);
-    //mat4.identity(mProject);
     mat4.lookAt(mView, [0, 0, -5], [0, 0, 0], [0, 1, 0]);
-    //mat4.ortho(mProject, 10, -10, -10, 10, .1, 100);
-    mat4.perspective(mProject, glMatrix.toRadian(45), canvas.width / canvas.height, 0.1, 100.0);
+    mat4.ortho(mProject, 10, -10, -10, 10, .1, 100);
 
     gl.uniformMatrix4fv(mWorldUniLoc, gl.FALSE, mWorld);
     gl.uniformMatrix4fv(mViewUniLoc, gl.FALSE, mView);
@@ -169,55 +178,16 @@ function main(){
     mat4.identity(idMatrix);
 
     var angle = 0;
-    var delta = 0;
     var loop = function(){
+        angle = performance.now() / 1000 / 6 * Math.PI;
+        mat4.rotate(mWorld, idMatrix, angle, [0, 1, 1]);
+        gl.uniformMatrix4fv(mWorldUniLoc, gl.FALSE, mWorld);
+
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        delta = performance.now();
-        objToDraw.forEach(element => {
-            //use program
-            //set buffers and attributes
-            //set uniforms
-            //draw
-
-                angle = performance.now() / 1000 / 6 * Math.PI;
-            mat4.rotate(mWorld, idMatrix, angle, [0, 1, 1]);
-            gl.uniformMatrix4fv(mWorldUniLoc, gl.FALSE, mWorld);
-
-            
-            gl.drawElements(gl.TRIANGLES, boxIndices.length, gl.UNSIGNED_SHORT, 0);
-            requestAnimationFrame(loop);
-        });
-        
+        gl.drawElements(gl.TRIANGLES, boxIndices.length, gl.UNSIGNED_SHORT, 0);
+        requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
-}
-function createShader(gl, type, source){
-    var shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(vShader);
-    if(!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)){
-        console.error("Vertext shader compile error", gl.getShaderInfoLog(vShader));
-    }
-    return shader;
-}
-function createProgram(gl, vShader, fShader){
-    var program = gl.createProgram();
-    gl.attachShader(program, vShader);
-    gl.attachShader(program, fShader);
-    gl.linkProgram(program);
-    if(!gl.getProgramParameter(program, gl.LINK_STATUS)){
-        console.error("Linker error", gl.getProgramInfoLog(program));
-    }
-
-    if(DEBUG){
-        gl.validateProgram(program);
-        if(!gl.getProgramParameter(program, gl.VALIDATE_STATUS)){
-            console.error("Validate Error", gl.getProgramInfoLog(program));
-        }
-    }
-    return program;
-}
-function bindBufferAndAttrib(gl, buffer, attribLoc){
-    
+    //Profit
 }
