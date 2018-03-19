@@ -6,14 +6,13 @@ var vSource = `
 precision highp float;
 attribute vec3 vertPosition;
 attribute vec3 vertColor;
-uniform mat4 mWorld;
-uniform mat4 mProject;
-uniform mat4 mView;
-uniform mat4 mPos;
+uniform mat4 mProViewWorld;
+uniform mat4 mAngle;
+uniform vec3 posOffset;
 varying vec3 fragColor;
 void main(){
     fragColor = vertColor;
-    gl_Position = mProject * mView * (mWorld * vec4(vertPosition, 1.0) + mPos);
+    gl_Position = (mProViewWorld * mAngle * vec4(vertPosition, 1.0) + vec4(posOffset[0] * 2.0, posOffset[1] * 2.0, posOffset[2], 1.0));
 }
 `;
 var fSource = `
@@ -27,177 +26,165 @@ void main(){
 function main(){
     var canvas = document.getElementById('glCanvas');
     var gl = canvas.getContext('webgl');
-    var objToDraw = [{
-        programInfo: {
-            program: null,
-            attribLoc: null,
-            uniLoc: null,
+    var programs = {
+        colorTriangle: {
+            program: createProgram(
+                gl, 
+                createShader(gl, gl.VERTEX_SHADER, vSource),
+                createShader(gl, gl.FRAGMENT_SHADER, fSource)),
+            attrib: [{
+                loc: "vertPosition",
+                size: 3,
+                type: gl.FLOAT,
+                norm: gl.FALSE,
+                stride: 6 * Float32Array.BYTES_PER_ELEMENT,
+                offset: 0,
+            },
+            {
+                loc: "vertColor",
+                size: 3,
+                type: gl.FLOAT,
+                norm: gl.FALSE,
+                stride: 6 * Float32Array.BYTES_PER_ELEMENT,
+                offset: 3 * Float32Array.BYTES_PER_ELEMENT,
+            }],
+            uniform: {
+                mProViewWorld: null,
+                posOffset: null,
+                mAngle: null,
+            },
+            setUniforms: (gl) => {
+                programs.colorTriangle.uniform.mProViewWorld = gl.getUniformLocation(programs.colorTriangle.program, "mProViewWorld");
+                programs.colorTriangle.uniform.posOffset = gl.getUniformLocation(programs.colorTriangle.program, "posOffset");
+                programs.colorTriangle.uniform.mAngle = gl.getUniformLocation(programs.colorTriangle.program, "mAngle");
+            },
         },
-        buffers: {
-            vertColor: null,
-            index: null,
-        },
-        uniforms,
+    }
+    var obj = [{
+        program: programs.colorTriangle,
+        vert: [
+            0.0, 0.0, 0.0, .27, 1.0, 0.705,
+            0.0, 1.0, 0.0, .27, 1.0, 0.705,
+            -0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
+        ],
+        index: [
+            0,1,2,
+        ],
+        posOffset: [0.0, 0.0, 0.0],
+        transform: null,
+        axis: [0, 0, 1],
+    },
+    {
+        program: programs.colorTriangle,
+        vert: [
+            0.0, 0.0, 0.0, 1.0, 1.0, 0.705,
+            1.0, 0.0, 0.0, .6, 1.0, 0.705,
+            1.0, 1.0, 0.0, .6, 0, 1.0,
+            0.0, 1.0, 0.0, .6, 0, 1.0,
+        ],
+        index: [
+            0,1,2,
+            0,2,3,
+        ],
+        posOffset: [0.0, 0.0, 0.0],
+        transform: null,
+        axis: [1, 1, 1],
+    },
+    {
+        program: programs.colorTriangle,
+        vert: [
+            0, 0, 0, 0, 0, 0,
+            .1, 0, 0, 1, 1, 1,
+            0, .3, 0, 1, 1, 1,
+            -.1, 0, 0, 1, 1, 1,
+            -.1, -.1, 0, 1, 1, 1,
+            .1, -.1, 0, 1, 1, 1,
+        ],
+        index: [
+            0,1,2,
+            0,2,3,
+            0,3,4,
+            0,5,1,
+        ],
+        posOffset: [0.0, 0.0, 0.0],
+        transform: null,
+        axis: [1, 1, 1],
     }];
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    var objToDraw = [
+        new drawObj(gl, obj[0]),
+    ];
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
     gl.frontFace(gl.CCW);
-    gl.cullFace(gl.BACK)
-    
-    var program = createProgram(
-        gl, 
-        createShader(gl, gl.VERTEX_SHADER, vSource),
-        createShader(gl, gl.FRAGMENT_SHADER, fShader));
+    gl.cullFace(gl.BACK);
 
-    var boxVertices = 
-	[ // X, Y, Z           R, G, B
-		// Top
-		-1.0, 1.0, -1.0,   0.5, 0.5, 0.5,
-		-1.0, 1.0, 1.0,    0.5, 0.5, 0.5,
-		1.0, 1.0, 1.0,     0.5, 0.5, 0.5,
-		1.0, 1.0, -1.0,    0.5, 0.5, 0.5,
+    gl.useProgram(obj[0].program.program);
 
-		// Left
-		-1.0, 1.0, 1.0,    0.75, 0.25, 0.5,
-		-1.0, -1.0, 1.0,   0.75, 0.25, 0.5,
-		-1.0, -1.0, -1.0,  0.75, 0.25, 0.5,
-		-1.0, 1.0, -1.0,   0.75, 0.25, 0.5,
-
-		// Right
-		1.0, 1.0, 1.0,    0.0, 0.25, 0.75,
-		1.0, -1.0, 1.0,   0.25, 0.25, 0.75,
-		1.0, -1.0, -1.0,  0.25, 0.25, 0.75,
-		1.0, 1.0, -1.0,   0.25, 0.25, 0.0,
-
-		// Front
-		1.0, 1.0, 1.0,    1.0, 0.0, 0.15,
-		1.0, -1.0, 1.0,    1.0, 1.0, 0.15,
-		-1.0, -1.0, 1.0,    1.0, 0.0, 0.15,
-		-1.0, 1.0, 1.0,    1.0, 1.0, 0.15,
-
-		// Back
-		1.0, 1.0, -1.0,    0.0, 1.0, 0.15,
-		1.0, -1.0, -1.0,    0.0, 0.0, 0.15,
-		-1.0, -1.0, -1.0,    0.0, 1.0, 0.15,
-		-1.0, 1.0, -1.0,    0.0, 1.0, 1.0,
-
-		// Bottom
-		-1.0, -1.0, -1.0,   0.5, 0.5, 1.0,
-		-1.0, -1.0, 1.0,    1.0, 0.5, 1.0,
-		1.0, -1.0, 1.0,     0.5, 0.5, 1.0,
-		1.0, -1.0, -1.0,    0.5, 0.5, 0.0,
-	];
-
-	var boxIndices =
-	[
-		// Top
-		0, 1, 2,
-		0, 2, 3,
-
-		// Left
-		5, 4, 6,
-		6, 4, 7,
-
-		// Right
-		8, 9, 10,
-		8, 10, 11,
-
-		// Front
-		13, 12, 14,
-		15, 14, 12,
-
-		// Back
-		16, 17, 18,
-		16, 18, 19,
-
-		// Bottom
-		21, 20, 22,
-		22, 20, 23
-	];
-
-    boxBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, boxBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boxVertices), gl.STATIC_DRAW);
-
-    boxIndexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, boxIndexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(boxIndices), gl.STATIC_DRAW);
-
-    var positionAttLoc = gl.getAttribLocation(program, 'vertPosition');
-    var colorAttLoc = gl.getAttribLocation(program, 'vertColor');
-    gl.vertexAttribPointer(
-        positionAttLoc,
-        3,
-        gl.FLOAT,
-        gl.FALSE,
-        6 * Float32Array.BYTES_PER_ELEMENT,
-        0
-    );
-    gl.vertexAttribPointer(
-        colorAttLoc,
-        3,
-        gl.FLOAT,
-        gl.FALSE,
-        6 * Float32Array.BYTES_PER_ELEMENT,
-        3 * Float32Array.BYTES_PER_ELEMENT
-    );
-    gl.enableVertexAttribArray(positionAttLoc);
-    gl.enableVertexAttribArray(colorAttLoc);
-    gl.useProgram(program);
-
-    var mWorldUniLoc = gl.getUniformLocation(program, 'mWorld');
-    var mViewUniLoc = gl.getUniformLocation(program, 'mView');
-    var mProjectUniLoc = gl.getUniformLocation(program, 'mProject');
+    for(var program in programs){
+        programs[program].setUniforms(gl);
+    }
 
     var mWorld = new Float32Array(16);
     var mView = new Float32Array(16);
     var mProject = new Float32Array(16);
+    var mProViewWorld = new Float32Array(16);
+
     mat4.identity(mWorld);
-    //mat4.identity(mView);
-    //mat4.identity(mProject);
-    mat4.lookAt(mView, [0, 0, -5], [0, 0, 0], [0, 1, 0]);
-    //mat4.ortho(mProject, 10, -10, -10, 10, .1, 100);
-    mat4.perspective(mProject, glMatrix.toRadian(45), canvas.width / canvas.height, 0.1, 100.0);
+    mWorld[5] = canvas.width / 1000;
+    mWorld[0] = canvas.height / 1000;
+    mat4.lookAt(mView, [0, 0, -1], [0, 0, 0], [0, 1, 0]);
+    mat4.ortho(mProject, 1, -1, -1, 1, .1, 10);
+    mat4.multiply(mProViewWorld, mProject, mView);
+    mat4.multiply(mProViewWorld, mProViewWorld, mWorld);
 
-    gl.uniformMatrix4fv(mWorldUniLoc, gl.FALSE, mWorld);
-    gl.uniformMatrix4fv(mViewUniLoc, gl.FALSE, mView);
-    gl.uniformMatrix4fv(mProjectUniLoc, gl.FALSE, mProject);
+    var mRotate = new Float32Array(16);
+    gl.uniformMatrix4fv(programs.colorTriangle.uniform.mProViewWorld, gl.FALSE, mProViewWorld);
 
-    var idMatrix = new Float32Array(16);
-    mat4.identity(idMatrix);
+    var curser = new drawObj(gl, obj[2]);
+    var randomStuff = [];
+    objToDraw.push(curser);
+    canvas.addEventListener('mousemove', function(evt) {
+        var pos = getMousePos(canvas, evt);
+        curser.toDraw = true;
+        curser.move([pos.x * 2 - 1, pos.y * 2 + 1, 0]);
+    }, false);
+    canvas.addEventListener('mouseleave', (evt) => {
+        curser.toDraw = false;
+    }, false);
+    canvas.addEventListener('click', (evt) => {
+        var thing = new drawObj(gl, obj[0]);
+        var pos = getMousePos(canvas, evt);
+        thing.scale(Math.random());
+        thing.move([pos.x * 2 - 1, pos.y * 2 + 1, 0])
+        randomStuff.push(thing);
+        objToDraw.push(thing);
+    }, false);
 
     var angle = 0;
     var delta = 0;
+    var prev = 0;
     var loop = function(){
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        delta = performance.now();
+        delta = (performance.now() - prev) / 1000;
+        prev = performance.now();
+        console.log(1/delta)
         objToDraw.forEach(element => {
-            //use program
-            //set buffers and attributes
-            //set uniforms
-            //draw
-
-                angle = performance.now() / 1000 / 6 * Math.PI;
-            mat4.rotate(mWorld, idMatrix, angle, [0, 1, 1]);
-            gl.uniformMatrix4fv(mWorldUniLoc, gl.FALSE, mWorld);
-
-            
-            gl.drawElements(gl.TRIANGLES, boxIndices.length, gl.UNSIGNED_SHORT, 0);
-            requestAnimationFrame(loop);
+            //element.posOffset[1] += delta * .1;
+            //var angle = delta * 6 / Math.PI;
+            //mat4.rotate(element.transform, element.transform, angle, element.axis);
+            element.draw();
         });
-        
+        requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
 }
 function createShader(gl, type, source){
     var shader = gl.createShader(type);
     gl.shaderSource(shader, source);
-    gl.compileShader(vShader);
-    if(!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)){
-        console.error("Vertext shader compile error", gl.getShaderInfoLog(vShader));
+    gl.compileShader(shader);
+    if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
+        console.error("Vertext shader compile error", gl.getShaderInfoLog(shader));
     }
     return shader;
 }
@@ -218,6 +205,60 @@ function createProgram(gl, vShader, fShader){
     }
     return program;
 }
-function bindBufferAndAttrib(gl, buffer, attribLoc){
-    
+function getMousePos(canvas, evt){
+    var rect = canvas.getBoundingClientRect();
+    return{
+        x: (evt.clientX - rect.left) / canvas.width,
+        y: -1 * (evt.clientY - rect.top) / canvas.height
+    };
+}
+class drawObj{
+    constructor(gl, obj){
+        this.obj = obj;
+        this.gl = gl;
+        this.position = [0, 0, 0];
+        this.transform = new Float32Array(16);
+        mat4.identity(this.transform);
+        this.axis = this.obj.axis;
+        this.toDraw = true;
+    }
+    bindBufferAndAttrib(){
+        var buffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(this.obj.vert), this.gl.STATIC_DRAW);
+        if(this.obj.index != null){
+            buffer = this.gl.createBuffer(); //TODO test this
+            this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, buffer);
+            this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.obj.index), this.gl.STATIC_DRAW);
+        }
+        var location = null;
+        var attrib = this.obj.program.attrib;
+        for(var i = 0; i < attrib.length; ++i){
+            location = this.gl.getAttribLocation(this.obj.program.program, attrib[i].loc);
+            this.gl.vertexAttribPointer(
+                location,
+                attrib[i].size,
+                attrib[i].type,
+                attrib[i].norm,
+                attrib[i].stride,
+                attrib[i].offset
+            );
+            this.gl.enableVertexAttribArray(location);
+        }
+    }
+    draw(){
+        if(this.toDraw){
+            this.bindBufferAndAttrib();
+            this.gl.uniform3fv(this.obj.program.uniform.posOffset, this.position);
+            this.gl.uniformMatrix4fv(this.obj.program.uniform.mAngle, this.gl.FALSE, this.transform);
+            this.gl.drawElements(this.gl.TRIANGLES, this.obj.index.length, this.gl.UNSIGNED_SHORT, 0);
+        }
+    }
+    move(position){
+        this.position = position;
+    }
+    scale(factor){
+        mat4.multiplyScalar(this.transform, this.transform, factor);
+        this.transform[15] = 1;
+    }
 }
