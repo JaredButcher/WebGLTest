@@ -8,11 +8,11 @@ attribute vec3 vertPosition;
 attribute vec3 vertColor;
 uniform mat4 mProViewWorld;
 uniform mat4 mAngle;
-uniform vec3 posOffset;
+uniform vec3 pos;
 varying vec3 fragColor;
 void main(){
     fragColor = vertColor;
-    gl_Position = mProViewWorld * mAngle * vec4(vertPosition, 1.0) + vec4(posOffset, 0.0);
+    gl_Position = mProViewWorld * mAngle * vec4(vertPosition, 1.0) + vec4(pos, 0.0);
 }
 `;
 var fSource = `
@@ -50,12 +50,12 @@ function main(){
             }],
             uniform: {
                 mProViewWorld: null,
-                posOffset: null,
+                pos: null,
                 mAngle: null,
             },
             setUniforms: (gl) => {
                 programs.vertColor.uniform.mProViewWorld = gl.getUniformLocation(programs.vertColor.program, "mProViewWorld");
-                programs.vertColor.uniform.posOffset = gl.getUniformLocation(programs.vertColor.program, "posOffset");
+                programs.vertColor.uniform.pos = gl.getUniformLocation(programs.vertColor.program, "pos");
                 programs.vertColor.uniform.mAngle = gl.getUniformLocation(programs.vertColor.program, "mAngle");
             },
         },
@@ -71,35 +71,35 @@ function main(){
         index: [
             0,1,2,
         ],
-        posOffset: [0.0, 0.0, 0.0],
+        pos: [0.0, 0.0, 0.0],
         transform: null,
         axis: [0, 0, 1],
         },
         box: {
             program: programs.vertColor,
             vert: [
-                0.0, 0.0, 0.0, 1.0, 1.0, 0.705,
-                1.0, 0.0, 0.0, .6, 1.0, 0.705,
-                1.0, 1.0, 0.0, .6, 0, 1.0,
-                0.0, 1.0, 0.0, .6, 0, 1.0,
+                -0.5, -0.5, 0.0, 1.0, 1.0, 0.705,
+                0.5, -0.5, 0.0, .6, 1.0, 0.705,
+                0.5, 0.5, 0.0, .6, 0, 1.0,
+                -.5, .5, 0.0, .6, 0, 1.0,
             ],
             index: [
                 0,1,2,
                 0,2,3,
             ],
-            posOffset: [0.0, 0.0, 0.0],
+            pos: [0.0, 0.0, 0.0],
             transform: null,
             axis: [1, 1, 1],
         },
         curser: {
             program: programs.vertColor,
             vert: [
-                0, 0, 0, 0, 0, 0,
-                .1, 0, 0, 1, 1, 1,
-                0, .3, 0, 1, 1, 1,
-                -.1, 0, 0, 1, 1, 1,
-                -.1, -.1, 0, 1, 1, 1,
-                .1, -.1, 0, 1, 1, 1,
+                0, -.3, 0, 0, 0, 0,
+                .1, -.3, 0, 1, 1, 1,
+                0, 0, 0, 1, 1, 1,
+                -.1, -.3, 0, 1, 1, 1,
+                -.1, -.4, 0, 1, 1, 1,
+                .1, -.4, 0, 1, 1, 1,
             ],
             index: [
                 0,1,2,
@@ -107,7 +107,7 @@ function main(){
                 0,3,4,
                 0,5,1,
             ],
-            posOffset: [0.0, 0.0, 0.0],
+            pos: [0.0, 0.0, 0.0],
             transform: null,
             axis: [1, 1, 1],
         }
@@ -267,7 +267,7 @@ class drawObj{
         }
         if(this.toDraw){
             this.bindBufferAndAttrib();
-            this.gl.uniform3fv(this.obj.program.uniform.posOffset, this.position);
+            this.gl.uniform3fv(this.obj.program.uniform.pos, this.position);
             this.gl.uniformMatrix4fv(this.obj.program.uniform.mAngle, this.gl.FALSE, this.transform);
             this.gl.drawElements(this.gl.TRIANGLES, this.obj.index.length, this.gl.UNSIGNED_SHORT, 0);
         }
